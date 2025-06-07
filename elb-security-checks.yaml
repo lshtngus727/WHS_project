@@ -1,0 +1,68 @@
+policies:
+  - name: elb-http-not-redirected
+    resource: app-elb
+    description: ALB에 HTTP → HTTPS 리디렉션이 설정되어 있는지 확인
+    filters:
+      - type: listener
+        key: Protocol
+        value: HTTP
+      - type: listener
+        key: DefaultActions[].RedirectConfig.Protocol
+        op: not-in
+        value_type: swap
+        value:
+          - HTTPS
+    actions:
+      - type: notify
+        subject: "[ELB 보안] HTTPS 리디렉션 미설정"
+        to:
+          - slack://security-alerts
+        transport:
+          type: sns
+          topic: arn:aws:sns:ap-northeast-2:123456789012:SecurityAlerts
+
+  - name: elb-access-logging-disabled
+    resource: app-elb
+    description: Access Logging 비활성화된 ALB 감지 및 활성화
+    filters:
+      - type: attributes
+        key: access_logs.enabled
+        value: false
+    actions:
+      - type: set-attributes
+        attributes:
+          access_logs.enabled: true
+          access_logs.s3_bucket: your-log-bucket
+          access_logs.s3_prefix: elb-logs
+      - type: notify
+        subject: "[ELB 보안] Access Logging 자동 활성화"
+        to:
+          - slack://security-alerts
+
+  - name: elb-deletion-protection-disabled
+    resource: app-elb
+    description: ALB의 삭제 방지 기능 미설정 여부 확인 및 설정
+    filters:
+      - type: attributes
+        key: deletion_protection.enabled
+        value: false
+    actions:
+      - type: set-attributes
+        attributes:
+          deletion_protection.enabled: true
+      - type: notify
+        subject: "[ELB 보안] 삭제 방지 설정 적용됨"
+        to:
+          - slack://security-alerts
+
+  - name: elb-waf-not-attached
+    resource: app-elb
+    description: ALB에 WAF(Web ACL)가 연결되어 있지 않은 경우 탐지
+    filters:
+      - type: waf-enabled
+        state: false
+    actions:
+      - type: notify
+        subject: "[ELB 보안] WAF 미연결 상태 감지"
+        to:
+          - slack://security-alerts

@@ -1,0 +1,31 @@
+policies:
+  - name: rds-subnet-group-unused-az-check
+    resource: rds-subnet-group
+    description: RDS 인스턴스가 배포되지 않은 AZ를 포함한 서브넷 그룹을 식별하고 알림
+    mode:
+      type: periodic
+      schedule: "rate(24 hours)"
+      role: arn:aws:iam::123456789012:role/CloudCustodianExecutionRole
+    filters:
+      - type: value
+        key: SubnetGroupStatus
+        value: Complete
+      - type: value
+        key: "Subnets[].SubnetAvailabilityZone.Name"
+        op: not-in
+        value_from:
+          url: s3://my-custodian-config/active-rds-azs.json
+          format: json
+          expr: active_azs
+      - "tag:keepAZ": absent
+    actions:
+      - type: tag
+        key: unusedAZ
+        value: true
+      - type: notify
+        subject: "[ALERT] RDS 서브넷 그룹에 불필요한 AZ 포함"
+        to:
+          - slack://security-alerts
+        transport:
+          type: sns
+          topic: arn:aws:sns:ap-northeast-2:123456789012:SecurityAlerts

@@ -1,0 +1,41 @@
+policies:
+  - name: s3-public-access-block
+    resource: s3
+    description: 퍼블릭 엑세스가 허용된 S3 버킷을 감지하고 차단 (예외 태그 제외)
+    mode:
+      type: periodic
+      schedule: "rate(12 hours)"
+      role: arn:aws:iam::123456789012:role/CloudCustodianExecutionRole
+    filters:
+      - or:
+          - type: value
+            key: "PublicAccessBlockConfiguration.BlockPublicAcls"
+            value: false
+          - type: value
+            key: "PublicAccessBlockConfiguration.BlockPublicPolicy"
+            value: false
+          - type: value
+            key: "Acl.Grants[*].Grantee.URI"
+            op: in
+            value:
+              - "http://acs.amazonaws.com/groups/global/AllUsers"
+              - "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+          - type: policy
+            key: "Principal"
+            value: "*"
+      - "tag:AllowPublic": absent
+    actions:
+      - type: set-public-block
+        state:
+          BlockPublicAcls: true
+          IgnorePublicAcls: true
+          BlockPublicPolicy: true
+          RestrictPublicBuckets: true
+      - type: notify
+        template: default
+        subject: "[ALERT] 퍼블릭 접근 차단된 S3 버킷 발견"
+        to:
+          - slack://security-alerts
+        transport:
+          type: sns
+          topic: arn:aws:sns:ap-northeast-2:111122223333:SecurityAlerts
